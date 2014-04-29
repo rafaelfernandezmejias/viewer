@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=7,IE=9, IE=10">
+<!-- Sets whether a web application runs in full-screen mode. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+<!-- Sets the style of the status bar for a web application. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Mobile Gallery</title>
+
+<!--<script src="http://jpillora.com/xdomain/dist/0.6/xdomain.min.js" slave="http://localhost:52350/proxy.html"></script>-->
+<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="http://code.jquery.com/mobile/1.4.0/jquery.mobile-1.4.0.min.js"></script>
+<script src="http://js.arcgis.com/3.9/"></script>
+<script src="js/streets.js"></script>
+
+<link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.0/jquery.mobile-1.4.0.min.css" />
+<link rel="stylesheet" href="http://js.arcgis.com/3.9/js/esri/css/esri.css">
+<link rel="stylesheet" href="css/mystyles.css"/>
+
+<style type="text/css">
+	 html, body
+	  {
+		height: 100%;
+		margin: 0px;
+		padding: 0px;
+		width: 100%;
+	  }
+	  #mapcontent, #map { width: 100%; height: 100%; padding: 0; position: absolute; z-index: 0;}
+	}
+</style>
+
+<script>
+    //AUTOCOMPLETE FROM VARIABLE streets
+    var myStreet;
+    $( document ).on( "pageinit", "#filterMe", function() {
+        streets.forEach(function(entry) {
+
+            $('ul#autocomplete').append("<li><a href=''#'>" + entry + "</li>");
+        });
+        $("ul:jqmData(role='listview')").children().addClass('ui-screen-hidden'); //Hidden the listview
+
+        $("#autocomplete").on("click", ">li", function(){
+            myStreet = $(this).text();
+            $('input').val($(this).text()); //Copy the li chosen to TextBox
+            $("ul:jqmData(role='listview')").children().addClass('ui-screen-hidden'); //Hidden the listview
+        });
+    });
+    //END AUTOCOMPLETE
+
+    var app = {};
+    require([
+        "dojo/parser", "dojo/promise/all", "dojo/_base/connect",
+        "esri/Color", "dojo/_base/array", "dojo/dom",
+        "esri/config", "esri/map", "esri/geometry/Extent",
+        "esri/symbols/SimpleFillSymbol", "esri/layers/ArcGISTiledMapServiceLayer", "esri/layers/ArcGISDynamicMapServiceLayer",
+        "esri/tasks/query", "esri/tasks/QueryTask", "esri/symbols/SimpleLineSymbol",
+        "dijit/layout/BorderContainer", "dijit/layout/ContentPane",
+        "dojo/domReady!"
+    ], function(
+            parser, all, connect,
+            Color, arrayUtils, dom,
+            esriConfig, Map, Extent,
+            SimpleFillSymbol, ArcGISTiledMapServiceLayer, ArcGISDynamicMapServiceLayer,
+            Query, QueryTask,SimpleLineSymbol
+            ) {
+        // create layout dijits
+        parser.parse();
+        // specify proxy for request with URL lengths > 2k characters
+        esriConfig.defaults.io.proxyUrl = "/proxy";
+
+        var customExtentAndSR = new esri.geometry.Extent(300000,5240000,340000,5285000,new esri.SpatialReference({"wkid":32181}));
+        app.map = new Map("map",{
+            extent:customExtentAndSR,
+            logo:false,
+            zoom: 1
+        } );
+
+        var agoServiceURL = "http://map.stjohns.ca/Arcgis/rest/services/MapCentre/STJ_Basemap_Topo_MapService/MapServer";
+        var agoLayer = new esri.layers.ArcGISTiledMapServiceLayer(agoServiceURL);
+        app.map.addLayer(agoLayer);
+
+        ortho2013 = new esri.layers.ArcGISTiledMapServiceLayer("http://map.stjohns.ca/ArcGIS/rest/services/MapCentre/STJ_MC_Ortho_2013_MapService/MapServer", {visible:false});
+        boundary = new esri.layers.ArcGISDynamicMapServiceLayer("http://map.stjohns.ca/Arcgis/rest/services/MapCentre/STJ_MC_CityBounds_MapService/MapServer", {visible:false});
+
+        app.map.addLayer(ortho2013);
+        app.map.addLayer(boundary);
+
+        document.getElementById('searchStreet').addEventListener('click', function() {
+            var streets;
+            // query task and query for streets
+            qtStreets = new QueryTask("http://map.stjohns.ca/ArcGIS/rest/services/MapCentre/STJ_MC_SearchTools_MapService/MapServer/1");
+            qStreets = new Query();
+            qStreets.outSpatialReference = {"wkid":32181};
+            qStreets.returnGeometry = true;
+            qStreets.geometryType = "esriGeometryPolyline";
+            qStreets.text = myStreet;
+            streets = qtStreets.execute(qStreets);
+            promises = new all([streets]);
+            promises.then(handleQueryResults);
+        }, false);
+
+        function handleQueryResults(results) {
+            //console.log("queries finished: ", results);
+            var street;
+
+            // make sure both queries finished successfully
+            if ( ! results[0].hasOwnProperty("features") ) {
+                console.log("Parcels query failed.");
+            }
+
+            street = results[0].features; //Only streets
+            app.map.graphics.clear();
+
+            // add the results to the map
+            arrayUtils.forEach(street, function(feat) {
+                feat.setSymbol(new SimpleLineSymbol(SimpleLineSymbol.STYLE_DASH, new Color([0,0,255,0.5]), 5));
+                app.map.graphics.add(feat);
+            });
+            var extent = esri.graphicsExtent(street);
+            app.map.setExtent(extent);
+        }
+    });
+    function updateLayerVisibility_boundary() {
+        var isChecked = $('#boundary').is(':checked');
+        if(isChecked == true){
+            boundary.show();
+        }
+        else{
+            boundary.hide()
+        }
+    }
+    function updateLayerVisibility_ortho2013() {
+        var isChecked = $('#ortho2013').is(':checked');
+        if(isChecked == true){
+            ortho2013.show();
+        }
+        else{
+            ortho2013.hide();
+        }
+    }
+    function changeExtent() {
+        var customExtentAndSR = new esri.geometry.Extent(300000,5240000,340000,5285000,new esri.SpatialReference({"wkid":32181}));
+        app.map.setExtent(customExtentAndSR);
+    }
+    function clearMap() {
+        app.map.graphics.clear();
+    }
+</script>
+</head>
+
+<body>
+	<!-- home view -->
+	<div data-role="page" id="home" data-theme="a">
+	  <!-- header -->
+	  <div data-role="header" data-position="fixed">
+		<a href="#toc" data-role="button" data-icon="bars" data-iconpos="notext"></a>
+		<h3>St. John's Map Viewer</h3>
+		<a href="#filterMe" data-role="button" data-icon="search" data-iconpos="notext" data-rel="dialog" data-transition="flip"></a>
+	  </div>
+	
+	  <!-- content -->
+	  <div data-role="content" id="mapcontent">
+		<div id="map"></div>
+	  </div>
+	  
+	  <div data-role="footer"
+			data-position="fixed"
+			data-id="vs_footer">
+			<div data-role="navbar">
+				<ul>
+					<li><a href="#home" onClick="changeExtent()"
+						data-role="button"
+						data-icon="home"
+						>Home</a>
+					</li>
+					<li id="clear" onclick="clearMap()"><a href="#"
+						data-role="button"
+						data-icon="delete"
+						>Clear Map</a>
+					</li>
+					<li><a href="#about" 
+						data-role="button"
+						data-icon="vs_stjohns"
+						data-rel="dialog"
+						>About</a>
+					</li>
+				</ul>
+			</div><!-- navbar -->
+		</div><!-- footer -->
+	</div>
+
+<!-- layer view -->
+<div data-role="page" id="toc" data-theme="a">
+  <!-- header -->
+  <div data-role="header" data-position="fixed">
+  <a href="#home" data-role="button" data-icon="back" data-iconpos="notext"></a>
+	<h3>Manage layers</h3>
+  </div>
+
+  <!-- content -->
+  <div data-role="content">
+	<form>
+	<fieldset data-role="controlgroup">
+		<legend>Choose a layer:</legend>
+		<input type="checkbox" name="boundary" id="boundary" onClick="updateLayerVisibility_boundary()">
+		<label for="boundary">Municipal Boundary</label>
+		<input type="checkbox" name="ortho2013" id="ortho2013" onClick="updateLayerVisibility_ortho2013()">
+		<label for="ortho2013">Imagery</label>
+	</fieldset>
+</form>
+  </div>
+</div>
+
+	<div data-role="page" id="filterMe" data-theme="a">
+		<div data-role="header">
+			<h1>Search address</h1>
+		</div>
+		<div data-role="content">
+			<ul id="autocomplete" data-role="listview" data-autodividers="false" data-inset="true" data-filter-reveal="true" data-filter="true" data-filter-placeholder="Find a street..." data-filter-theme="a"></ul>
+            <a id="searchStreet" href="#home" data-role="button" data-icon="search" data-iconpos="notext" >Search</a>
+		</div>
+	</div>
+	
+	<div data-role="page" id="about" data-theme="a">
+		<div data-role="header">
+			<h1>About this application</h1>
+		</div>
+		<div data-role="content" >
+			<a>Disclaimer:</a><br>
+			<c>Information on this Web site is provided as a public service by the City of St. John's. We cannot guarantee that all information is current or accurate. Users should verify the information before acting on it. Although we make every effort to ensure that all information is accurate and complete, we cannot guarantee its integrity.</c>
+			<br><br>
+			<c>The use of this Web site is subject to the following terms and conditions and constitutes the user's agreement to those terms and conditions. Information on this web site is provided by the City solely for the user's information and it is provided without warranty, guarantee, or responsibility of any kind, either express or implied. The City of St. John's and its employees will not be liable for any loss or damages of any nature, either direct or indirect, arising from use of the information provided on this Web site or information provided at any other site that can be accessed from this site.</c>
+		</div>
+	</div>
+</body>
+</html>

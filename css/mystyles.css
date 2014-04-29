@@ -1,0 +1,17 @@
+
+.ui-icon-vs_stjohns:after {
+    background-image: url("images/icon_stjohns.png");
+    /* Make your icon fit */
+    background-size: 18px 18px;
+}
+
+@media only screen and (-webkit-min-device-pixel-ratio:2) {
+
+	.ui-icon-vs_stjohns {
+		background-image: url("images/icon_stjohns_hr.png");
+		background-size:18px 18px;
+	}
+
+	
+
+}
