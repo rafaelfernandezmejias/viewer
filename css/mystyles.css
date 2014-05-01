@@ -1,17 +1,86 @@
-
 .ui-icon-vs_stjohns:after {
     background-image: url("images/icon_stjohns.png");
     /* Make your icon fit */
     background-size: 18px 18px;
 }
-
 @media only screen and (-webkit-min-device-pixel-ratio:2) {
-
 	.ui-icon-vs_stjohns {
 		background-image: url("images/icon_stjohns_hr.png");
 		background-size:18px 18px;
 	}
+}
 
-	
+/* Inline buttons in <div data-role="page" id="filterMe" data-theme="a"> */
+/*STREETS*/
+#autocomplete-container, #btnGetStreets-container {
+    display: inline-block;
+}
+#autocomplete-container {
+    width: 88%;
+}
+#btnGetStreets-container {
+    width: 10%;
+}
+#btnGetStreets-container .ui-btn {
+    margin-top: 0px !important;
+    margin-left: 15px;
+}
+/*CIVIC NUMBERS*/
+#civicNumber-container, #btnGetCivicNumber-container {
+    display: inline-block;
+}
+#civicNumber-container {
+    width: 88%;
+}
+#btnGetCivicNumber-container {
+    width: 10%;
+}
+#btnGetCivicNumber-container .ui-btn {
+    margin-top: 0px !important;
+    margin-left: 15px;
+}
 
+/*We can animate the graphic using CSS animations and transitions to apply a pulsing effect.
+In the example below the -webkit and -moz prefixes are used to define properties for the animation.*/
+@-webkit-keyframes
+pulse
+{
+    0%
+    {
+        opacity: 1.0;
+    }
+    45%
+    {
+        opacity: .20;
+    }
+    100%
+    {
+        opacity: 1.0;
+    }
+}
+@-moz-keyframes
+pulse
+{
+    0%
+    {
+        opacity: 1.0;
+    }
+    45%
+    {
+        opacity: .20;
+
+    }
+    100%
+    {
+        opacity: 1.0;
+    }
+}
+
+#map_graphics_layer {
+    -webkit-animation-duration: 3s;
+    -webkit-animation-iteration-count: infinite;
+    -webkit-animation-name: pulse;
+    -moz-animation-duration: 3s;
+    -moz-animation-iteration-count: infinite;
+    -moz-animation-name: pulse;
 }

@@ -36,16 +36,18 @@
     //AUTOCOMPLETE FROM VARIABLE streets
     var myStreet;
     $( document ).on( "pageinit", "#filterMe", function() {
-        streets.forEach(function(entry) {
 
+        streets.forEach(function(entry) {
             $('ul#autocomplete').append("<li><a href=''#'>" + entry + "</li>");
         });
-        $("ul:jqmData(role='listview')").children().addClass('ui-screen-hidden'); //Hidden the listview
+        $("ul:jqmData(role='listview')").children().addClass('ui-screen-hidden');
 
-        $("#autocomplete").on("click", ">li", function(){
+        $("#autocomplete li").click(function() {
             myStreet = $(this).text();
-            $('input').val($(this).text()); //Copy the li chosen to TextBox
+            $('input[data-type="search"]').val($(this).text()); //Copy the li chosen to TextBox
             $("ul:jqmData(role='listview')").children().addClass('ui-screen-hidden'); //Hidden the listview
+
+            $('#civicNumber').val('');
         });
     });
     //END AUTOCOMPLETE
@@ -53,16 +55,16 @@
     var app = {};
     require([
         "dojo/parser", "dojo/promise/all", "dojo/_base/connect",
-        "esri/Color", "dojo/_base/array", "dojo/dom",
-        "esri/config", "esri/map", "esri/geometry/Extent",
+        "esri/Color", "dojo/_base/array", "dojo/dom", "esri/symbols/Font", "esri/symbols/TextSymbol",
+        "esri/config", "esri/map", "esri/geometry/Extent", "esri/tasks/locator", "esri/graphic", "esri/InfoTemplate", "esri/symbols/SimpleMarkerSymbol",
         "esri/symbols/SimpleFillSymbol", "esri/layers/ArcGISTiledMapServiceLayer", "esri/layers/ArcGISDynamicMapServiceLayer",
         "esri/tasks/query", "esri/tasks/QueryTask", "esri/symbols/SimpleLineSymbol",
         "dijit/layout/BorderContainer", "dijit/layout/ContentPane",
         "dojo/domReady!"
     ], function(
             parser, all, connect,
-            Color, arrayUtils, dom,
-            esriConfig, Map, Extent,
+            Color, arrayUtils, dom, Font, TextSymbol,
+            esriConfig, Map, Extent, Locator, Graphic, InfoTemplate, SimpleMarkerSymbol,
             SimpleFillSymbol, ArcGISTiledMapServiceLayer, ArcGISDynamicMapServiceLayer,
             Query, QueryTask,SimpleLineSymbol
             ) {
@@ -87,6 +89,8 @@
 
         app.map.addLayer(ortho2013);
         app.map.addLayer(boundary);
+
+
 
         document.getElementById('searchStreet').addEventListener('click', function() {
             var streets;
@@ -122,7 +126,112 @@
             var extent = esri.graphicsExtent(street);
             app.map.setExtent(extent);
         }
+
+        document.getElementById('searchCivicNumber').addEventListener('click', function() {
+            //alert(myStreet);
+            //alert($('#civicNumber').val());
+
+            app.map.graphics.clear();
+
+            var tmp = $('#civicNumber').val() + " " + myStreet;
+            var address = {
+                "SingleLine": tmp
+            };
+            locator = new Locator("http://map.stjohns.ca/ArcGIS/rest/services/STJ_Geocode_Service/GeocodeServer");
+            locator.outSpatialReference = app.map.spatialReference;
+            var options = {
+                address: address,
+                outFields: ["Loc_name"]
+            }
+
+
+            locator.addressToLocations(options);
+            locator.on("address-to-locations-complete", showResults);
+
+        }, false);
+
+        function showResults(evt) {
+
+            var candidate;
+            //var symbol = new SimpleMarkerSymbol();
+            var infoTemplate = new InfoTemplate(
+                    "Location",
+                    "Address: ${address}"
+            );
+            //var symbol = new esri.symbol.SimpleMarkerSymbol();
+            //symbol.setStyle(SimpleMarkerSymbol.STYLE_CIRCLE);
+            //symbol.setColor(new Color([153,0,51,0.75]));
+            var symbol = new SimpleMarkerSymbol(
+                    SimpleMarkerSymbol.STYLE_CIRCLE,
+                    14,
+                    new SimpleLineSymbol(
+                            SimpleLineSymbol.STYLE_SOLID,
+                            new Color([0, 0, 250, 0.5]),
+                            8
+                    ),
+                    new Color([0, 0, 250, 0.9])
+            );
+
+            var geom;
+            arrayUtils.every(evt.addresses, function(candidate) {
+                console.log(candidate.score);
+                if (candidate.score > 80) {
+                    console.log(candidate.location);
+                    var attributes = {
+                        address: candidate.address
+                    };
+                    geom = candidate.location;
+                    var graphic = new Graphic(geom, symbol, attributes, infoTemplate);
+
+
+                    //add a graphic to the map at the geocoded location
+                    app.map.graphics.add(graphic);
+
+                    //Change the cursor
+                    app.map.graphics.enableMouseEvents();
+                    dojo.connect(app.map.graphics, "onMouseOver",function(event){
+                        app.map.setMapCursor("help");
+                    });
+                    dojo.connect(app.map.graphics,"onMouseOut",function(event){
+                        app.map.setMapCursor("default");
+                    });
+
+                    /*
+                    //add a text symbol to the map listing the location of the matched address.
+                    var displayText = candidate.address;
+
+                    var font = new Font(
+                            "16pt",
+                            Font.STYLE_NORMAL,
+                            Font.VARIANT_NORMAL,
+                            Font.WEIGHT_BOLD,
+                            "Helvetica"
+                    );
+
+                    var textSymbol = new TextSymbol(
+                            displayText,
+                            font,
+                            //new Color("#666633")
+                            new Color("#0000ff")
+                    );
+                    textSymbol.setOffset(0,-20);
+                    app.map.graphics.add(new Graphic(geom, textSymbol, attributes, infoTemplate));
+                    */
+                    return false; //break out of loop after one candidate with score greater  than 80 is found.
+                }
+                else
+                {
+                    alert("Address not found in our service.");
+                    return false;
+                }
+            });
+            if ( geom !== undefined ) {
+                app.map.centerAndZoom(geom, 7);
+            }
+        }
     });
+
+    //OUT
     function updateLayerVisibility_boundary() {
         var isChecked = $('#boundary').is(':checked');
         if(isChecked == true){
@@ -219,8 +328,18 @@
 			<h1>Search address</h1>
 		</div>
 		<div data-role="content">
-			<ul id="autocomplete" data-role="listview" data-autodividers="false" data-inset="true" data-filter-reveal="true" data-filter="true" data-filter-placeholder="Find a street..." data-filter-theme="a"></ul>
-            <a id="searchStreet" href="#home" data-role="button" data-icon="search" data-iconpos="notext" >Search</a>
+            <div id="autocomplete-container">
+                <ul id="autocomplete" data-inline="true" data-role="listview" data-autodividers="false" data-inset="true" data-filter-reveal="true" data-filter="true" data-filter-placeholder="Find a street..." data-filter-theme="a">
+            </div>
+            <div id="btnGetStreets-container">
+                <a id="searchStreet" href="#home" data-inline="true" data-role="button"  data-icon="search" data-iconpos="notext" >Search</a>
+            </div>
+            <div id="civicNumber-container">
+                <input type="search" data-clear-btn="true" name="text-3" id="civicNumber" value="" placeholder="Write a civic number ...">
+            </div>
+            <div id="btnGetCivicNumber-container">
+                <a id="searchCivicNumber" href="#home" data-inline="true" data-role="button"  data-icon="search" data-iconpos="notext" >Search</a>
+            </div>
 		</div>
 	</div>
 	
